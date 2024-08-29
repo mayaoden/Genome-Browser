@@ -6,8 +6,6 @@ library(glmGamPoi)
 
 # Load your dataset
 NacreMITFIntegrated_allcell_GFP_positive <- readRDS("./NacreMITFIntegrated_allcell_GFP_positive.rds")
-NacreMITFIntegrated_allcell_GFP_positive <- FindVariableFeatures(NacreMITFIntegrated_allcell_GFP_positive, selection.method = "vst", nfeatures = 2000)
-NacreMITFIntegrated_allcell_GFP_positive <- ScaleData(NacreMITFIntegrated_allcell_GFP_positive)
 
 # Getting Expressed Genes
 gene_expression_data <- GetAssayData(NacreMITFIntegrated_allcell_GFP_positive, slot = "data")
@@ -60,5 +58,21 @@ server <- function(input, output) {
         patchwork::plot_layout(ncol = 2, nrow = 2)
     }
     (p1 / p2 + plot_layout(heights = c(3, 6)))
+  })
+  
+  output$geneSubsetPlot <- renderPlot({
+    
+    data_to_plot <- filtered_data()
+    
+    p1 <- DimPlot(data_to_plot, label = TRUE)
+    p2 <- DimPlot(data_to_plot, group.by = "Type") + 
+          (DimPlot(data_to_plot, split.by = "Type", label = TRUE) + NoLegend()) + 
+          plot_layout(ncol = 2, widths = c(1, 2))
+    
+    plot_title <- ifelse(is.null(input$subsetGene) || input$subsetGene == "", 
+                         "NacreMITFIntegrated_allcell_GFP_positive", 
+                         paste("NacreMITFIntegrated_allcell_GFP_positive_", input$subsetGene, "_subset", sep = ""))
+      
+    (p1 / p2 ) + plot_annotation(plot_title, theme = theme(plot.title = element_text(face = "bold", hjust = 0.5, size = 15)))
   })
 }
