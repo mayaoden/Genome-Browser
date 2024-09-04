@@ -40,15 +40,19 @@ server <- function(input, output) {
                    selected = "")
   })
   
+  output$violinPlotGeneSelector <- renderUI({
+    selectizeInput("violinPlotGenes", "Select Gene of Interest", 
+                   choices = c("", expressed_genes), 
+                   selected = "",
+                   multiple = TRUE)
+  })
+  
+  
   output$geneExpressionPlot <- renderPlot({
     
     data_to_plot <- filtered_data()
 
     if (is.null(input$expressionGene) || input$expressionGene == "") {
-      dummy_feature <- rep(0, ncol(data_to_plot))
-      names(dummy_feature) <- colnames(data_to_plot)
-      data_to_plot[["."]] <- dummy_feature
-      
       p1 <- FeaturePlot(data_to_plot, features = ".", label = TRUE, cols = c("gray", "gray")) + NoLegend() + ggtitle(" ")
       p2 <- FeaturePlot(data_to_plot, features = ".", label = TRUE, cols = c("gray", "gray"), split.by = "Type") + NoLegend() +
         patchwork::plot_layout(ncol = 2, nrow = 2)
@@ -74,5 +78,19 @@ server <- function(input, output) {
                          paste("NacreMITFIntegrated_allcell_GFP_positive_", input$subsetGene, "_subset", sep = ""))
       
     (p1 / p2 ) + plot_annotation(plot_title, theme = theme(plot.title = element_text(face = "bold", hjust = 0.5, size = 15)))
+  })
+  
+  output$violinPlot <- renderPlot({
+    data_to_plot <- filtered_data()
+    
+    selected_genes <- input$violinPlotGenes
+    
+    if (is.null(selected_genes) || length(selected_genes) == 0) {
+      VlnPlot(data_to_plot, features = ".", group.by = "seurat_clusters", split.by = "Type")
+    } else if (length(selected_genes) > 1){    
+      VlnPlot(data_to_plot, features = selected_genes, group.by = "seurat_clusters", split.by = "Type", stack = TRUE, sort = FALSE, flip = TRUE)
+    } else {
+        VlnPlot(data_to_plot, features = selected_genes, group.by = "seurat_clusters", split.by = "Type")
+    }  
   })
 }

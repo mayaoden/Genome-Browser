@@ -13,10 +13,8 @@ ui <- fluidPage(
                  uiOutput("subsetGeneSelector")
                ),
                mainPanel(
-                 mainPanel(
-                   div(
-                     plotOutput("geneSubsetPlot", height = "750px", width = "920px")
-                   )
+                 div(
+                   plotOutput("geneSubsetPlot", height = "740px", width = "910px")
                  )
                )
              )
@@ -24,11 +22,23 @@ ui <- fluidPage(
     tabPanel("Gene Expression Plot",
              sidebarLayout(
                sidebarPanel(
-                 uiOutput("geneExpressionSelector")
+                 uiOutput("geneExpressionSelector")  # UI output for gene selection
                ),
                mainPanel(
                  div(
-                   plotOutput("geneExpressionPlot", height = "800px")
+                   plotOutput("geneExpressionPlot", height = "800px")  # Fixed dimensions
+                 )
+               )
+             )
+    ),
+    tabPanel("Violin Plot",
+             sidebarLayout(
+               sidebarPanel(
+                 uiOutput("violinPlotGeneSelector")  # UI output for gene selection
+               ),
+               mainPanel(
+                 div(
+                   plotOutput("violinPlot", height = "740px")
                  )
                )
              )
