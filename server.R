@@ -3,16 +3,18 @@ library(Seurat)
 library(patchwork)
 library(ggplot2)
 library(glmGamPoi)
+library(openxlsx)
+library(DT)
 
 # Load your dataset
 NacreMITFIntegrated_allcell_GFP_positive <- readRDS("./NacreMITFIntegrated_allcell_GFP_positive.rds")
 
 # Getting Expressed Genes
-gene_expression_data <- GetAssayData(NacreMITFIntegrated_allcell_GFP_positive, slot = "data")
+gene_expression_data <- GetAssayData(NacreMITFIntegrated_allcell_GFP_positive, layer = "data")
 expressed_genes <- rownames(gene_expression_data)[Matrix::rowSums(gene_expression_data > 0) > 0]
 
 server <- function(input, output) {
-
+  
   output$subsetGeneSelector <- renderUI({
     selectizeInput("subsetGene", "Select Gene to Subset By", 
                    choices = c("", expressed_genes), 
@@ -28,7 +30,7 @@ server <- function(input, output) {
       subsetted_data <- NacreMITFIntegrated_allcell_GFP_positive %>% subset(!!gene_name > 0)
       subsetted_data <- SCTransform(subsetted_data, conserve.memory=TRUE)
       subsetted_data <- RunPCA(subsetted_data)
-      subsetted_data  <- RunUMAP(subsetted_data,reduction = "pca", dims = 1:30)
+      subsetted_data  <- RunUMAP(subsetted_data, reduction = "pca", dims = 1:30)
       subsetted_data <- FindNeighbors(subsetted_data, reduction = "pca", dims = 1:30)
       subsetted_data <- FindClusters(subsetted_data, resolution = 1.2)
     }
@@ -47,11 +49,9 @@ server <- function(input, output) {
                    multiple = TRUE)
   })
   
-  
   output$geneExpressionPlot <- renderPlot({
-    
     data_to_plot <- filtered_data()
-
+    
     if (is.null(input$expressionGene) || input$expressionGene == "") {
       p1 <- FeaturePlot(data_to_plot, features = ".", label = TRUE, cols = c("gray", "gray")) + NoLegend() + ggtitle(" ")
       p2 <- FeaturePlot(data_to_plot, features = ".", label = TRUE, cols = c("gray", "gray"), split.by = "Type") + NoLegend() +
@@ -65,18 +65,17 @@ server <- function(input, output) {
   })
   
   output$geneSubsetPlot <- renderPlot({
-    
     data_to_plot <- filtered_data()
     
     p1 <- DimPlot(data_to_plot, label = TRUE)
     p2 <- DimPlot(data_to_plot, group.by = "Type") + 
-          (DimPlot(data_to_plot, split.by = "Type", label = TRUE) + NoLegend()) + 
-          plot_layout(ncol = 2, widths = c(1, 2))
+      (DimPlot(data_to_plot, split.by = "Type", label = TRUE) + NoLegend()) + 
+      plot_layout(ncol = 2, widths = c(1, 2))
     
     plot_title <- ifelse(is.null(input$subsetGene) || input$subsetGene == "", 
                          "NacreMITFIntegrated_allcell_GFP_positive", 
                          paste("NacreMITFIntegrated_allcell_GFP_positive_", input$subsetGene, "_subset", sep = ""))
-      
+    
     (p1 / p2 ) + plot_annotation(plot_title, theme = theme(plot.title = element_text(face = "bold", hjust = 0.5, size = 15)))
   })
   
@@ -90,7 +89,43 @@ server <- function(input, output) {
     } else if (length(selected_genes) > 1){    
       VlnPlot(data_to_plot, features = selected_genes, group.by = "seurat_clusters", split.by = "Type", stack = TRUE, sort = FALSE, flip = TRUE)
     } else {
-        VlnPlot(data_to_plot, features = selected_genes, group.by = "seurat_clusters", split.by = "Type")
+      VlnPlot(data_to_plot, features = selected_genes, group.by = "seurat_clusters", split.by = "Type")
     }  
   })
+  
+  output$downloadDEGsTable <- downloadHandler(
+    filename = function() {
+      filename <- ifelse(is.null(input$subsetGene) || input$subsetGene == "", 
+                         "NacreMITFIntegrated_allcell_GFP_positive_DEGs.xlsx", 
+                         paste("NacreMITFIntegrated_allcell_GFP_positive_", input$subsetGene, "_subset_DEGs.xlsx", sep = ""))
+      return(filename)
+    },
+    content = function(file) {
+      data_to_plot <- filtered_data()
+      clusters <- levels(data_to_plot$seurat_clusters)
+      wb <- createWorkbook()
+      for (cluster_id in clusters) {
+        tryCatch({
+          cell_indices <- WhichCells(data_to_plot, idents = cluster_id)
+          if (length(cell_indices) == 0) {
+            warning(paste("No cells found for cluster", cluster_id))
+            next
+          }
+          markers <- FindMarkers(data_to_plot, ident.1 = cluster_id,
+                                 only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+          markers_df <- as.data.frame(markers)
+          gene_names <- rownames(markers_df)
+          
+          sheet_name <- paste("Cluster_", cluster_id)
+          addWorksheet(wb, sheetName = sheet_name)
+          writeData(wb, sheet = sheet_name, cbind("Gene" = gene_names, markers_df))
+          
+          print(paste("Cluster", cluster_id, "done."))
+        }, error = function(e) {
+          warning(paste("Error processing cluster", cluster_id, ": ", conditionMessage(e)))
+        })
+      }
+      saveWorkbook(wb, file, overwrite = TRUE)
+    }
+  )
 }

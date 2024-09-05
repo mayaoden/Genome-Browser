@@ -7,14 +7,16 @@ ui <- fluidPage(
   hr(),
   
   tabsetPanel(
+    id = "tabs",
     tabPanel("Gene Expression Subsetting",
              sidebarLayout(
                sidebarPanel(
-                 uiOutput("subsetGeneSelector")
+                 uiOutput("subsetGeneSelector"),
+                 downloadButton("downloadDEGsTable", "Download DEGs Table")
                ),
                mainPanel(
                  div(
-                   plotOutput("geneSubsetPlot", height = "740px", width = "910px")
+                   plotOutput("geneSubsetPlot", height = "700px", width = "910px")
                  )
                )
              )
@@ -26,7 +28,7 @@ ui <- fluidPage(
                ),
                mainPanel(
                  div(
-                   plotOutput("geneExpressionPlot", height = "800px")  # Fixed dimensions
+                   plotOutput("geneExpressionPlot", height = "700px")  # Fixed dimensions
                  )
                )
              )
@@ -38,7 +40,7 @@ ui <- fluidPage(
                ),
                mainPanel(
                  div(
-                   plotOutput("violinPlot", height = "740px")
+                   plotOutput("violinPlot", height = "700px")
                  )
                )
              )
