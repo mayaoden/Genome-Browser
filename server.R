@@ -5,6 +5,9 @@ library(ggplot2)
 library(glmGamPoi)
 library(openxlsx)
 library(DT)
+library(SeuratWrappers)
+library(monocle3)
+library(cowplot)
 
 # Load your dataset
 NacreMITFIntegrated_allcell_GFP_positive <- readRDS("./NacreMITFIntegrated_allcell_GFP_positive.rds")
@@ -128,4 +131,131 @@ server <- function(input, output) {
       saveWorkbook(wb, file, overwrite = TRUE)
     }
   )
+  
+  output$rootNodeSelector <- renderUI({
+    cluster_numbers <- levels(filtered_data()$seurat_clusters)
+    selectizeInput("selectedRootNodes", "Select Clusters", 
+                   choices = c("", cluster_numbers), 
+                   selected = "", 
+                   multiple = TRUE)
+  })
+  
+
+  output$rootNodePlots <- renderPlot({
+    
+    data_to_plot <- filtered_data()
+    selected_root_nodes <- input$selectedRootNodes
+    print(selected_root_nodes)
+    
+    getCDSObject <- function(seurat_object) {
+      
+      seurat_object_name <- deparse(substitute(seurat_object))
+      cds <- as.cell_data_set(seurat_object)
+      
+      cds <- tryCatch({
+        cluster_cells(cds)
+      }, error = function(e) {
+        message("Default clustering method failed: ", e$message)
+        message("Attempting Louvain clustering method.")
+        cluster_cells(cds, cluster_method = "louvain")
+      })
+      
+      original_umap_clusters <- seurat_object$seurat_clusters
+      colData(cds)$orig_umap_cluster <- original_umap_clusters
+      
+      cds <- learn_graph(cds, use_partition = TRUE, verbose = FALSE)
+    }
+    
+    cds <- getCDSObject(data_to_plot)
+    cds_WT <- getCDSObject(subset(data_to_plot, Type == "WT"))
+    cds_Nacre <- getCDSObject(subset(data_to_plot, Type == "Nacre"))
+
+    plot_title <- ifelse(is.null(input$subsetGene) || input$subsetGene == "", 
+                         "NacreMITFIntegrated_allcell_GFP_positive", 
+                         paste("NacreMITFIntegrated_allcell_GFP_positive_", input$subsetGene, "_subset", sep = ""))
+    
+    if (is.null(selected_root_nodes) || length(selected_root_nodes) == 0) {
+      p1 <- plot_cells(cds,
+                 color_cells_by = "orig_umap_cluster",
+                 label_groups_by_cluster = TRUE,
+                 label_leaves = FALSE,
+                 label_branch_points = FALSE, 
+                 group_label_size = 5)
+      p2 <- plot_cells(cds_WT,
+                       color_cells_by = "orig_umap_cluster",
+                       label_groups_by_cluster = TRUE,
+                       label_leaves = FALSE,
+                       label_branch_points = FALSE, 
+                       group_label_size = 5) +
+            ggtitle("WT") + theme(plot.title = element_text(hjust = 0.5))
+      p3 <- plot_cells(cds_Nacre,
+                       color_cells_by = "orig_umap_cluster",
+                       label_groups_by_cluster = TRUE,
+                       label_leaves = FALSE,
+                       label_branch_points = FALSE, 
+                       group_label_size = 5) +
+            ggtitle("Nacre") + theme(plot.title = element_text(hjust = 0.5))
+      
+      p1 + p2 + p3 + plot_annotation(plot_title, theme = theme(plot.title = element_text(face = "bold", hjust = 0.5, size = 15)))
+    } else {
+      
+      getPsuedotime <- function(cds_object, root_node) {
+        root_cells <- colnames(cds)[cds$orig_umap_cluster == root_node]
+        cds_pseudotime <- order_cells(cds, root_cells = root_cells)
+      }
+      
+      getPsuedotimeGraph <- function(cds_pseudotime, cds_WT_pseudotime, cds_Nacre_pseudotime, root_node) {
+        p1 <- plot_cells(cds_pseudotime,
+                         color_cells_by = "pseudotime",
+                         group_cells_by = "orig_umap_cluster",
+                         label_cell_groups = FALSE,
+                         label_groups_by_cluster = FALSE,
+                         label_leaves = FALSE,
+                         label_branch_points = FALSE,
+                         label_roots = FALSE,
+                         trajectory_graph_color = "grey60") +
+          ggtitle(paste("Root Node", root_node)) + theme(plot.title = element_text(hjust = 0.5))
+        
+        p2 <- plot_cells(cds_WT_pseudotime,
+                         color_cells_by = "pseudotime",
+                         group_cells_by = "orig_umap_cluster",
+                         label_cell_groups = FALSE,
+                         label_groups_by_cluster = FALSE,
+                         label_leaves = FALSE,
+                         label_branch_points = FALSE,
+                         label_roots = FALSE,
+                         trajectory_graph_color = "grey60") +
+          ggtitle("WT") + theme(plot.title = element_text(hjust = 0.5))
+        
+        p3 <- plot_cells(cds_Nacre_pseudotime,
+                         color_cells_by = "pseudotime",
+                         group_cells_by = "orig_umap_cluster",
+                         label_cell_groups = FALSE,
+                         label_groups_by_cluster = FALSE,
+                         label_leaves = FALSE,
+                         label_branch_points = FALSE,
+                         label_roots = FALSE,
+                         trajectory_graph_color = "grey60") +
+          ggtitle("Nacre") + theme(plot.title = element_text(hjust = 0.5))
+        
+        p <- p1 + p2 + p3
+      }
+      
+      plot_list <- list()
+      
+      for (root_node in selected_root_nodes) {
+        
+        cds <- getPsuedotime(cds, root_node)
+        cds_WT <- getPsuedotime(cds_WT, root_node)
+        cds_Nacre <- getPsuedotime(cds_Nacre, root_node)
+        
+        plot_list[[length(plot_list) + 1]] <- getPsuedotimeGraph(cds, cds_WT, cds_Nacre, root_node)
+      }
+      
+      plot_grid(plotlist = plot_list, ncol = 1) + 
+        plot_annotation(title = plot_title, 
+                        theme = theme(plot.title = 
+                                        element_text(hjust = 0.5, face = "bold")))
+    }  
+  })
 }

@@ -36,11 +36,23 @@ ui <- fluidPage(
     tabPanel("Violin Plot",
              sidebarLayout(
                sidebarPanel(
-                 uiOutput("violinPlotGeneSelector")  # UI output for gene selection
+                 uiOutput("violinPlotGeneSelector")
                ),
                mainPanel(
                  div(
                    plotOutput("violinPlot", height = "700px")
+                 )
+               )
+             )
+    ),
+    tabPanel("Monocle3 / Psuedotime",
+             sidebarLayout(
+               sidebarPanel(
+                 uiOutput("rootNodeSelector") 
+               ),
+               mainPanel(
+                 div(
+                   plotOutput("rootNodePlots", height = "600px")
                  )
                )
              )
