@@ -5,6 +5,7 @@ library(ggplot2)
 library(glmGamPoi)
 library(openxlsx)
 library(DT)
+library(R.utils)
 library(SeuratWrappers)
 library(monocle3)
 library(cowplot)
@@ -39,6 +40,14 @@ server <- function(input, output) {
     }
   })
   
+  plot_title <- reactive({
+    if (is.null(input$subsetGene) || input$subsetGene == "") {
+      "NacreMITFIntegrated_allcell_GFP_positive"
+    } else {
+      paste("NacreMITFIntegrated_allcell_GFP_positive_", input$subsetGene, "_subset", sep = "")
+    }
+  })
+
   output$geneExpressionSelector <- renderUI({
     selectizeInput("expressionGene", "Select Gene of Interest", 
                    choices = c("", expressed_genes), 
@@ -56,30 +65,36 @@ server <- function(input, output) {
     data_to_plot <- filtered_data()
     
     if (is.null(input$expressionGene) || input$expressionGene == "") {
-      p1 <- FeaturePlot(data_to_plot, features = ".", label = TRUE, cols = c("gray", "gray")) + NoLegend() + ggtitle(" ")
-      p2 <- FeaturePlot(data_to_plot, features = ".", label = TRUE, cols = c("gray", "gray"), split.by = "Type") + NoLegend() +
+      p1 <- FeaturePlot(data_to_plot, features = ".", label = TRUE, label.size = 5, cols = c("gray", "gray")) + NoLegend() + ggtitle(" ")
+      p2 <- FeaturePlot(data_to_plot, features = ".", label = TRUE, label.size = 5, cols = c("gray", "gray"), split.by = "Type") + NoLegend() +
         patchwork::plot_layout(ncol = 2, nrow = 2)
     } else {
-      p1 <- FeaturePlot(data_to_plot, features = input$expressionGene, label = TRUE, cols = c("gray", "red")) + NoLegend()
-      p2 <- FeaturePlot(data_to_plot, features = input$expressionGene, label = TRUE, cols = c("gray", "red"), split.by = "Type") + NoLegend() +
+      p1 <- FeaturePlot(data_to_plot, features = input$expressionGene, label = TRUE, label.size = 5, cols = c("gray", "red")) + NoLegend()  + 
+        theme(plot.title = element_text(face = "plain"))
+      p2 <- FeaturePlot(data_to_plot, features = input$expressionGene, label = TRUE, label.size = 5, cols = c("gray", "red"), split.by = "Type") + NoLegend() +
         patchwork::plot_layout(ncol = 2, nrow = 2)
     }
-    (p1 / p2 + plot_layout(heights = c(3, 6)))
+    (p1 / p2 + plot_layout(heights = c(3, 6))) + 
+      plot_annotation(plot_title(), theme = theme(plot.title = element_text(face = "bold", hjust = 0.5, size = 15)))
+  })
+  
+  output$rootNodeSelector <- renderUI({
+    cluster_numbers <- levels(filtered_data()$seurat_clusters)
+    selectizeInput("selectedRootNodes", "Select Root Node Clusters", 
+                   choices = c("", cluster_numbers), 
+                   selected = "", 
+                   multiple = TRUE)
   })
   
   output$geneSubsetPlot <- renderPlot({
     data_to_plot <- filtered_data()
     
-    p1 <- DimPlot(data_to_plot, label = TRUE)
+    p1 <- DimPlot(data_to_plot, label = TRUE, label.size = 5)
     p2 <- DimPlot(data_to_plot, group.by = "Type") + 
-      (DimPlot(data_to_plot, split.by = "Type", label = TRUE) + NoLegend()) + 
+      (DimPlot(data_to_plot, split.by = "Type", label = TRUE, label.size = 5) + NoLegend()) + 
       plot_layout(ncol = 2, widths = c(1, 2))
-    
-    plot_title <- ifelse(is.null(input$subsetGene) || input$subsetGene == "", 
-                         "NacreMITFIntegrated_allcell_GFP_positive", 
-                         paste("NacreMITFIntegrated_allcell_GFP_positive_", input$subsetGene, "_subset", sep = ""))
-    
-    (p1 / p2 ) + plot_annotation(plot_title, theme = theme(plot.title = element_text(face = "bold", hjust = 0.5, size = 15)))
+
+        (p1 / p2 ) + plot_annotation(plot_title(), theme = theme(plot.title = element_text(face = "bold", hjust = 0.5, size = 15)))
   })
   
   output$violinPlot <- renderPlot({
@@ -88,11 +103,17 @@ server <- function(input, output) {
     selected_genes <- input$violinPlotGenes
     
     if (is.null(selected_genes) || length(selected_genes) == 0) {
-      VlnPlot(data_to_plot, features = ".", group.by = "seurat_clusters", split.by = "Type")
+      VlnPlot(data_to_plot, features = ".", group.by = "seurat_clusters", split.by = "Type") + 
+        theme(plot.title = element_text(face = "plain")) + 
+        plot_annotation(plot_title(), theme = theme(plot.title = element_text(face = "bold", hjust = 0.5, size = 15)))
     } else if (length(selected_genes) > 1){    
-      VlnPlot(data_to_plot, features = selected_genes, group.by = "seurat_clusters", split.by = "Type", stack = TRUE, sort = FALSE, flip = TRUE)
+      VlnPlot(data_to_plot, features = selected_genes, group.by = "seurat_clusters", split.by = "Type", stack = TRUE, sort = FALSE, flip = TRUE) + 
+        theme(plot.title = element_text(face = "plain")) + 
+        plot_annotation(plot_title(), theme = theme(plot.title = element_text(face = "bold", hjust = 0.5, size = 15)))
     } else {
-      VlnPlot(data_to_plot, features = selected_genes, group.by = "seurat_clusters", split.by = "Type")
+      VlnPlot(data_to_plot, features = selected_genes, group.by = "seurat_clusters", split.by = "Type") + 
+        theme(plot.title = element_text(face = "plain")) + 
+        plot_annotation(plot_title(), theme = theme(plot.title = element_text(face = "bold", hjust = 0.5, size = 15)))
     }  
   })
   
@@ -132,21 +153,11 @@ server <- function(input, output) {
     }
   )
   
-  output$rootNodeSelector <- renderUI({
-    cluster_numbers <- levels(filtered_data()$seurat_clusters)
-    selectizeInput("selectedRootNodes", "Select Clusters", 
-                   choices = c("", cluster_numbers), 
-                   selected = "", 
-                   multiple = TRUE)
-  })
-  
-
   output$rootNodePlots <- renderPlot({
     
     data_to_plot <- filtered_data()
     selected_root_nodes <- input$selectedRootNodes
-    print(selected_root_nodes)
-    
+
     getCDSObject <- function(seurat_object) {
       
       seurat_object_name <- deparse(substitute(seurat_object))
@@ -170,10 +181,6 @@ server <- function(input, output) {
     cds_WT <- getCDSObject(subset(data_to_plot, Type == "WT"))
     cds_Nacre <- getCDSObject(subset(data_to_plot, Type == "Nacre"))
 
-    plot_title <- ifelse(is.null(input$subsetGene) || input$subsetGene == "", 
-                         "NacreMITFIntegrated_allcell_GFP_positive", 
-                         paste("NacreMITFIntegrated_allcell_GFP_positive_", input$subsetGene, "_subset", sep = ""))
-    
     if (is.null(selected_root_nodes) || length(selected_root_nodes) == 0) {
       p1 <- plot_cells(cds,
                  color_cells_by = "orig_umap_cluster",
@@ -196,12 +203,12 @@ server <- function(input, output) {
                        group_label_size = 5) +
             ggtitle("Nacre") + theme(plot.title = element_text(hjust = 0.5))
       
-      p1 + p2 + p3 + plot_annotation(plot_title, theme = theme(plot.title = element_text(face = "bold", hjust = 0.5, size = 15)))
+      p1 + p2 + p3 + plot_annotation(plot_title(), theme = theme(plot.title = element_text(face = "bold", hjust = 0.5, size = 15)))
     } else {
       
       getPsuedotime <- function(cds_object, root_node) {
-        root_cells <- colnames(cds)[cds$orig_umap_cluster == root_node]
-        cds_pseudotime <- order_cells(cds, root_cells = root_cells)
+        root_cells <- colnames(cds_object)[cds_object$orig_umap_cluster == root_node]
+        cds_pseudotime <- order_cells(cds_object, root_cells = root_cells)
       }
       
       getPsuedotimeGraph <- function(cds_pseudotime, cds_WT_pseudotime, cds_Nacre_pseudotime, root_node) {
@@ -253,7 +260,7 @@ server <- function(input, output) {
       }
       
       plot_grid(plotlist = plot_list, ncol = 1) + 
-        plot_annotation(title = plot_title, 
+        plot_annotation(title = plot_title(), 
                         theme = theme(plot.title = 
                                         element_text(hjust = 0.5, face = "bold")))
     }  
