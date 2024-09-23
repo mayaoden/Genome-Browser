@@ -153,16 +153,11 @@ server <- function(input, output) {
     }
   )
   
-  output$rootNodePlots <- renderPlot({
-    
+  cds_objects <- reactive({
     data_to_plot <- filtered_data()
-    selected_root_nodes <- input$selectedRootNodes
-
+    
     getCDSObject <- function(seurat_object) {
-      
-      seurat_object_name <- deparse(substitute(seurat_object))
       cds <- as.cell_data_set(seurat_object)
-      
       cds <- tryCatch({
         cluster_cells(cds)
       }, error = function(e) {
@@ -170,38 +165,29 @@ server <- function(input, output) {
         message("Attempting Louvain clustering method.")
         cluster_cells(cds, cluster_method = "louvain")
       })
-      
-      original_umap_clusters <- seurat_object$seurat_clusters
-      colData(cds)$orig_umap_cluster <- original_umap_clusters
-      
+      colData(cds)$orig_umap_cluster <- seurat_object$seurat_clusters
       cds <- learn_graph(cds, use_partition = TRUE, verbose = FALSE)
+      return(cds)
     }
     
-    cds <- getCDSObject(data_to_plot)
-    cds_WT <- getCDSObject(subset(data_to_plot, Type == "WT"))
-    cds_Nacre <- getCDSObject(subset(data_to_plot, Type == "Nacre"))
-
+    list(
+      cds = getCDSObject(data_to_plot),
+      cds_WT = getCDSObject(subset(data_to_plot, Type == "WT")),
+      cds_Nacre = getCDSObject(subset(data_to_plot, Type == "Nacre"))
+    )
+  })
+  
+  output$rootNodePlots <- renderPlot({
+    data_to_plot <- filtered_data()
+    selected_root_nodes <- input$selectedRootNodes
+    cds_list <- cds_objects()
+    
     if (is.null(selected_root_nodes) || length(selected_root_nodes) == 0) {
-      p1 <- plot_cells(cds,
-                 color_cells_by = "orig_umap_cluster",
-                 label_groups_by_cluster = TRUE,
-                 label_leaves = FALSE,
-                 label_branch_points = FALSE, 
-                 group_label_size = 5)
-      p2 <- plot_cells(cds_WT,
-                       color_cells_by = "orig_umap_cluster",
-                       label_groups_by_cluster = TRUE,
-                       label_leaves = FALSE,
-                       label_branch_points = FALSE, 
-                       group_label_size = 5) +
-            ggtitle("WT") + theme(plot.title = element_text(hjust = 0.5))
-      p3 <- plot_cells(cds_Nacre,
-                       color_cells_by = "orig_umap_cluster",
-                       label_groups_by_cluster = TRUE,
-                       label_leaves = FALSE,
-                       label_branch_points = FALSE, 
-                       group_label_size = 5) +
-            ggtitle("Nacre") + theme(plot.title = element_text(hjust = 0.5))
+      p1 <- plot_cells(cds_list$cds, color_cells_by = "orig_umap_cluster", label_groups_by_cluster = TRUE, label_leaves = FALSE, label_branch_points = FALSE, group_label_size = 5)
+      p2 <- plot_cells(cds_list$cds_WT, color_cells_by = "orig_umap_cluster", label_groups_by_cluster = TRUE, label_leaves = FALSE, label_branch_points = FALSE, group_label_size = 5) +
+        ggtitle("WT") + theme(plot.title = element_text(hjust = 0.5))
+      p3 <- plot_cells(cds_list$cds_Nacre, color_cells_by = "orig_umap_cluster", label_groups_by_cluster = TRUE, label_leaves = FALSE, label_branch_points = FALSE, group_label_size = 5) +
+        ggtitle("Nacre") + theme(plot.title = element_text(hjust = 0.5))
       
       p1 + p2 + p3 + plot_annotation(plot_title(), theme = theme(plot.title = element_text(face = "bold", hjust = 0.5, size = 15)))
     } else {
@@ -252,17 +238,17 @@ server <- function(input, output) {
       
       for (root_node in selected_root_nodes) {
         
-        cds <- getPsuedotime(cds, root_node)
-        cds_WT <- getPsuedotime(cds_WT, root_node)
-        cds_Nacre <- getPsuedotime(cds_Nacre, root_node)
+        cds <- getPsuedotime(cds_list$cds, root_node)
+        cds_WT <- getPsuedotime(cds_list$cds_WT, root_node)
+        cds_Nacre <- getPsuedotime(cds_list$cds_Nacre, root_node)
         
         plot_list[[length(plot_list) + 1]] <- getPsuedotimeGraph(cds, cds_WT, cds_Nacre, root_node)
       }
       
-      plot_grid(plotlist = plot_list, ncol = 1) + 
-        plot_annotation(title = plot_title(), 
-                        theme = theme(plot.title = 
+      plot_grid(plotlist = plot_list, ncol = 1) +
+        plot_annotation(title = plot_title(),
+                        theme = theme(plot.title =
                                         element_text(hjust = 0.5, face = "bold")))
-    }  
+    }
   })
 }
