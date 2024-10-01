@@ -52,7 +52,7 @@ ui <- fluidPage(
                ),
                mainPanel(
                  div(
-                   plotOutput("rootNodePlots", height = "600px")
+                   plotOutput("rootNodePlots") #height = "300px"
                  )
                )
              )
