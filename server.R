@@ -260,4 +260,36 @@ server <- function(input, output) {
       return(600)
     }
   })
+  
+  output$clusterCompositionPlot <- renderPlot({ 
+    data_to_plot <- filtered_data()
+    total_cells_per_type <- table(data_to_plot$Type)
+    total_cells_per_type_df <- as.data.frame(total_cells_per_type)
+    colnames(total_cells_per_type_df) <- c("Type", "TotalCells")
+    total_cells_per_type_df$Percentage <- total_cells_per_type_df$TotalCells / 
+      sum(total_cells_per_type_df$TotalCells) * 100
+    pie_chart <- ggplot(total_cells_per_type_df, aes(x = "", y = TotalCells, 
+                                                     fill = Type)) + geom_bar(stat = "identity") + geom_text(aes(
+                                                       label = paste0(round(Percentage), "%")), position = position_stack(
+                                                         vjust = 0.5)) + coord_polar("y", start = 0) + scale_fill_discrete(name = "Type") + theme_void()
+    cell_counts <- table(data_to_plot$seurat_clusters, 
+                         data_to_plot$Type)
+    cell_counts_df <- as.data.frame(cell_counts)
+    colnames(cell_counts_df) <- c("Cluster", "Type", "CellCount")
+    total_cells_per_type <- tapply(data_to_plot$Type, 
+                                   data_to_plot$Type, length)
+    cell_counts_df$Proportion <- cell_counts_df$CellCount / 
+      total_cells_per_type[cell_counts_df$Type]
+    
+    bar_graph <- ggplot(cell_counts_df, aes(x = Cluster, y = Proportion, 
+                                            fill = Type)) +
+      geom_bar(stat = "identity", position = "dodge") +
+      labs(x = "Cluster", y = "Proportion of Cells") + 
+      theme_minimal() +
+      theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    
+    # Merge proportional bar graph and pie chart
+    (bar_graph + NoLegend()) + pie_chart + plot_layout(ncol = 2, widths = c(3, 1)) + 
+      plot_annotation(plot_title(), theme = theme(plot.title = element_text(face = "bold", hjust = 0.5, size = 15)))
+  })
 }

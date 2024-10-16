@@ -21,6 +21,13 @@ ui <- fluidPage(
                )
              )
     ),
+    tabPanel("Cluster Composition",
+      fluidRow(
+        column(width = 8, offset = 2,  
+        plotOutput("clusterCompositionPlot", width = "100%", height = "500px")
+        )
+      )    
+    ),
     tabPanel("Gene Expression Plot",
              sidebarLayout(
                sidebarPanel(
