@@ -96,6 +96,17 @@ server <- function(input, output) {
     (p1 / p2 ) + plot_annotation(plot_title(), theme = theme(plot.title = element_text(face = "bold", hjust = 0.5, size = 15)))
   })
   
+  output$geneSubsetPlot1 <- renderPlot({
+    data_to_plot <- filtered_data()
+    
+    p1 <- DimPlot(data_to_plot, label = TRUE, label.size = 5)
+    p2 <- DimPlot(data_to_plot, group.by = "Type") + 
+      (DimPlot(data_to_plot, split.by = "Type", label = TRUE, label.size = 5) + NoLegend()) + 
+      plot_layout(ncol = 2, widths = c(1, 2))
+    
+    (p1 / p2 ) + plot_annotation(plot_title(), theme = theme(plot.title = element_text(face = "bold", hjust = 0.5, size = 15)))
+  })
+  
   output$violinPlot <- renderPlot({
     data_to_plot <- filtered_data()
     
@@ -118,37 +129,51 @@ server <- function(input, output) {
   
   output$downloadDEGsTable <- downloadHandler(
     filename = function() {
-      filename <- ifelse(is.null(input$subsetGene) || input$subsetGene == "", 
-                         "NacreMITFIntegrated_allcell_GFP_positive_DEGs.xlsx", 
-                         paste("NacreMITFIntegrated_allcell_GFP_positive_", input$subsetGene, "_subset_DEGs.xlsx", sep = ""))
-      return(filename)
+      plot_title <- plot_title()  # Ensure this is a reactive function if needed
+      if (input$cluster == "All") {
+        plot_title <- paste0(plot_title, "_DEGS.xlsx")  # Add .xlsx extension
+      } else {
+        plot_title <- paste0(plot_title, "_cluster_", input$cluster, "_DEGs.xlsx")  # Add .xlsx extension
+      }
+      return(plot_title)
     },
     content = function(file) {
-      data_to_plot <- filtered_data()
-      clusters <- levels(data_to_plot$seurat_clusters)
+      data_to_plot <- filtered_data()  # Get your data
       wb <- createWorkbook()
-      for (cluster_id in clusters) {
-        tryCatch({
-          cell_indices <- WhichCells(data_to_plot, idents = cluster_id)
-          if (length(cell_indices) == 0) {
-            warning(paste("No cells found for cluster", cluster_id))
-            next
-          }
-          markers <- FindMarkers(data_to_plot, ident.1 = cluster_id,
-                                 only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
-          markers_df <- as.data.frame(markers)
-          gene_names <- rownames(markers_df)
-          
-          sheet_name <- paste("Cluster_", cluster_id)
-          addWorksheet(wb, sheetName = sheet_name)
-          writeData(wb, sheet = sheet_name, cbind("Gene" = gene_names, markers_df))
-          
-          print(paste("Cluster", cluster_id, "done."))
-        }, error = function(e) {
-          warning(paste("Error processing cluster", cluster_id, ": ", conditionMessage(e)))
-        })
+      
+      if (input$cluster == "All") {
+        clusters <- levels(data_to_plot$seurat_clusters)
+        for (cluster_id in clusters) {
+          tryCatch({
+            cell_indices <- WhichCells(data_to_plot, idents = cluster_id)
+            if (length(cell_indices) == 0) {
+              warning(paste("No cells found for cluster", cluster_id))
+              next
+            }
+            markers <- FindMarkers(data_to_plot, ident.1 = cluster_id,
+                                   only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+            markers_df <- as.data.frame(markers)
+            gene_names <- rownames(markers_df)
+            
+            sheet_name <- paste("Cluster_", cluster_id)
+            addWorksheet(wb, sheetName = sheet_name)
+            writeData(wb, sheet = sheet_name, cbind("Gene" = gene_names, markers_df))
+            
+            print(paste("Cluster", cluster_id, "done."))
+          }, error = function(e) {
+            warning(paste("Error processing cluster", cluster_id, ": ", conditionMessage(e)))
+          })
+        }
+      } else {
+        cluster <- input$cluster
+        data_to_plot <- subset(data_to_plot, seurat_clusters == cluster)
+        Idents(data_to_plot) <- data_to_plot$Type
+        markers <- FindMarkers(data_to_plot, ident.1 = "WT", ident.2 = "Nacre")
+        addWorksheet(wb, "Sheet1")
+        writeData(wb, "Sheet1", markers)  # Assuming markers is what you want to save
       }
-      saveWorkbook(wb, file, overwrite = TRUE)
+      
+      saveWorkbook(wb, file, overwrite = TRUE)  # Use the provided file argument
     }
   )
   
@@ -288,8 +313,15 @@ server <- function(input, output) {
       theme_minimal() +
       theme(axis.text.x = element_text(angle = 45, hjust = 1))
     
-    # Merge proportional bar graph and pie chart
-    (bar_graph + NoLegend()) + pie_chart + plot_layout(ncol = 2, widths = c(3, 1)) + 
+    (bar_graph + NoLegend()) + pie_chart + plot_layout(ncol = 2, widths = c(4, 1)) + 
       plot_annotation(plot_title(), theme = theme(plot.title = element_text(face = "bold", hjust = 0.5, size = 15)))
   })
+  
+  output$clusterSelector <- renderUI({
+    cluster_numbers <- levels(filtered_data()$seurat_clusters)
+    selectizeInput("cluster", "Select Clusters", 
+                   choices = c("All", cluster_numbers), 
+                   selected = "All")
+  })
+  
 }
