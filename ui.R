@@ -8,7 +8,18 @@ ui <- fluidPage(
   
   tabsetPanel(
     id = "tabs",
-    tabPanel("Gene Expression Subsetting",
+    tabPanel("Select Dataset",
+             sidebarLayout(
+               sidebarPanel(
+                 uiOutput("datasetSelector"),
+               ),
+               mainPanel(
+                 div(
+                 )
+               )
+             )
+    ),
+    tabPanel("Gene Subsetting",
              sidebarLayout(
                sidebarPanel(
                  uiOutput("subsetGeneSelector"),
@@ -26,10 +37,12 @@ ui <- fluidPage(
                  uiOutput("clusterSelector"),
                  downloadButton("downloadDEGsTable", "Download DEGs Table"),
                  p(),
-                 p("If a cluster is selected, the DE genes between WT and Nacre cells are calculated. 
-            Positive log fold-change indicates that the gene is more highly expressed in WT,
-            whereas negative values correspond to Nacre. Similarly, pct.1 corresponds with WT 
-            and pct.2 with Nacre.")
+                 p("When no cluster is selected, the DEGs between each cluster
+                    and all other cells are calculated. If a cluster is 
+                    selected, the DEGs between WT and Nacre cells are 
+                    calculated. Positive log fold change and pct.1 correspond 
+                    with WT, while negative log fold change and pct.2 correspond
+                    with Nacre.")
                ),
                mainPanel(
                  div(

@@ -10,28 +10,32 @@ library(SeuratWrappers)
 library(monocle3)
 library(cowplot)
 
-# Load your dataset
-NacreMITFIntegrated_allcell_GFP_positive <- readRDS("./NacreMITFIntegrated_allcell_GFP_positive.rds")
-
-# Getting Expressed Genes
-gene_expression_data <- GetAssayData(NacreMITFIntegrated_allcell_GFP_positive, layer = "data")
-expressed_genes <- rownames(gene_expression_data)[Matrix::rowSums(gene_expression_data > 0) > 0]
-
 server <- function(input, output) {
+  
+  selected_dataset <- reactive({
+    req(input$selectedDataset)
+    readRDS(paste0("./", input$selectedDataset, ".rds"))
+  })
+  
+  expressed_genes <- reactive({
+    req(selected_dataset())
+    gene_expression_data <- GetAssayData(selected_dataset(), layer = "data")
+    rownames(gene_expression_data)[Matrix::rowSums(gene_expression_data > 0) > 0]
+  })
   
   output$subsetGeneSelector <- renderUI({
     selectizeInput("subsetGene", "Select Gene to Subset By", 
-                   choices = c("", expressed_genes), 
+                   choices = c("", expressed_genes()), 
                    selected = "")
   })
   
   filtered_data <- reactive({
     if (is.null(input$subsetGene) || input$subsetGene == "") {
-      NacreMITFIntegrated_allcell_GFP_positive
+      selected_dataset()
     } else {
       subset_gene <- input$subsetGene
       gene_name <- sym(subset_gene)
-      subsetted_data <- NacreMITFIntegrated_allcell_GFP_positive %>% subset(!!gene_name > 0)
+      subsetted_data <- selected_dataset() %>% subset(!!gene_name > 0)
       subsetted_data <- SCTransform(subsetted_data, conserve.memory=TRUE)
       subsetted_data <- RunPCA(subsetted_data)
       subsetted_data  <- RunUMAP(subsetted_data, reduction = "pca", dims = 1:30)
@@ -42,27 +46,28 @@ server <- function(input, output) {
   
   plot_title <- reactive({
     if (is.null(input$subsetGene) || input$subsetGene == "") {
-      "NacreMITFIntegrated_allcell_GFP_positive"
+      input$selectedDataset
     } else {
-      paste("NacreMITFIntegrated_allcell_GFP_positive_", input$subsetGene, "_subset", sep = "")
+      paste(input$selectedDataset, "_", input$subsetGene, "_subset", sep = "")
     }
   })
   
   output$geneExpressionSelector <- renderUI({
     selectizeInput("expressionGene", "Select Gene of Interest", 
-                   choices = c("", expressed_genes), 
+                   choices = c("", expressed_genes()), 
                    selected = "")
   })
   
   output$violinPlotGeneSelector <- renderUI({
     selectizeInput("violinPlotGenes", "Select Gene of Interest", 
-                   choices = c("", expressed_genes), 
+                   choices = c("", expressed_genes()), 
                    selected = "",
                    multiple = TRUE)
   })
   
   output$geneExpressionPlot <- renderPlot({
-    data_to_plot <- filtered_data()
+
+    data_to_plot <- filtered_data();
     
     if (is.null(input$expressionGene) || input$expressionGene == "") {
       p1 <- FeaturePlot(data_to_plot, features = ".", label = TRUE, label.size = 5, cols = c("gray", "gray")) + NoLegend() + ggtitle(" ")
@@ -129,16 +134,16 @@ server <- function(input, output) {
   
   output$downloadDEGsTable <- downloadHandler(
     filename = function() {
-      plot_title <- plot_title()  # Ensure this is a reactive function if needed
+      plot_title <- plot_title()
       if (input$cluster == "All") {
-        plot_title <- paste0(plot_title, "_DEGS.xlsx")  # Add .xlsx extension
+        plot_title <- paste0(plot_title, "_DEGS.xlsx") 
       } else {
-        plot_title <- paste0(plot_title, "_cluster_", input$cluster, "_DEGs.xlsx")  # Add .xlsx extension
+        plot_title <- paste0(plot_title, "_cluster_", input$cluster, "_DEGs.xlsx")
       }
       return(plot_title)
     },
     content = function(file) {
-      data_to_plot <- filtered_data()  # Get your data
+      data_to_plot <- filtered_data()
       wb <- createWorkbook()
       
       if (input$cluster == "All") {
@@ -170,10 +175,10 @@ server <- function(input, output) {
         Idents(data_to_plot) <- data_to_plot$Type
         markers <- FindMarkers(data_to_plot, ident.1 = "WT", ident.2 = "Nacre")
         addWorksheet(wb, "Sheet1")
-        writeData(wb, "Sheet1", markers)  # Assuming markers is what you want to save
+        writeData(wb, "Sheet1", markers)
       }
       
-      saveWorkbook(wb, file, overwrite = TRUE)  # Use the provided file argument
+      saveWorkbook(wb, file, overwrite = TRUE)
     }
   )
   
@@ -324,4 +329,11 @@ server <- function(input, output) {
                    selected = "All")
   })
   
+  output$datasetSelector <- renderUI({
+    selectizeInput("selectedDataset", "Select Dataset", 
+                   choices = c("", 
+                               "NacreMITFIntegrated_allcell_GFP_positive",
+                               "NacreMITFIntegrated_allcell_GFP_negative"), 
+                   selected = "")
+  })
 }
