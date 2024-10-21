@@ -174,10 +174,11 @@ server <- function(input, output) {
         data_to_plot <- subset(data_to_plot, seurat_clusters == cluster)
         Idents(data_to_plot) <- data_to_plot$Type
         markers <- FindMarkers(data_to_plot, ident.1 = "WT", ident.2 = "Nacre")
+        markers_df <- as.data.frame(markers)
+        gene_names <- rownames(markers_df)
         addWorksheet(wb, "Sheet1")
-        writeData(wb, "Sheet1", markers)
+        writeData(wb, "Sheet1", cbind("Gene" = gene_names, markers_df))
       }
-      
       saveWorkbook(wb, file, overwrite = TRUE)
     }
   )
